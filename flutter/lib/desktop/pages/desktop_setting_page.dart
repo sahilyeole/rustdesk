@@ -331,8 +331,10 @@ class _GeneralState extends State<_General> {
           'allow-always-software-render'),
     ));
     children.add(
-            _OptionCheckBox(context, 'Check for software update on startup.','enable-check-update'),
-    );
+            _OptionCheckBox(context, 'Check for software update on startup.','enable-check-update',
+            isServer: false,
+            ));
+            debugPrint(mainGetLocalBoolOptionSync('enable-check-update').toString());
     if (bind.mainShowOption(key: 'allow-linux-headless')) {
       children.add(_OptionCheckBox(
           context, 'Allow linux headless', 'allow-linux-headless'));
