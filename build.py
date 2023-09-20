@@ -302,7 +302,7 @@ def ffi_bindgen_function_refactor():
 
 def build_flutter_deb(version, features):
     if not skip_cargo:
-        system2(f'cargo build --features {features} --lib --release')
+        system2(f'VCPKG_ROOT=$HOME/vcpkg cargo build --features {features} --lib --release')
         ffi_bindgen_function_refactor()
     os.chdir('flutter')
     system2('flutter build linux --release')

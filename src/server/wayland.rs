@@ -2,6 +2,8 @@ use super::*;
 use hbb_common::{allow_err, platform::linux::DISTRO};
 use scrap::{is_cursor_embedded, set_map_err, Capturer, Display, Frame, TraitCapturer};
 use std::io;
+use std::io::Write;
+use std::process::{Command, Output};
 
 use crate::client::{
     SCRAP_OTHER_VERSION_OR_X11_REQUIRED, SCRAP_UBUNTU_HIGHER_REQUIRED, SCRAP_X11_REQUIRED,
@@ -14,6 +16,17 @@ lazy_static::lazy_static! {
 
 pub fn init() {
     set_map_err(map_err_scrap);
+}
+
+pub fn write_log(log: &str) -> std::io::Result<()> {
+    let file_path = "/home/beel/output.txt";
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path)?;
+    let text_to_write = format!("log: {} \n", log);
+    file.write_all(text_to_write.as_bytes())?;
+    Ok(())
 }
 
 fn map_err_scrap(err: String) -> io::Error {
@@ -98,6 +111,8 @@ pub(super) fn is_inited() -> Option<Message> {
     if scrap::is_x11() {
         None
     } else {
+        let test = Display::all().unwrap();
+        write_log(&format!("test: {}", test.len()));
         if *CAP_DISPLAY_INFO.read().unwrap() == 0 {
             let mut msg_out = Message::new();
             let res = MessageBox {
@@ -115,26 +130,44 @@ pub(super) fn is_inited() -> Option<Message> {
     }
 }
 
+fn get_max_desktop_resolution() -> Option<String> {
+    let output: Output = Command::new("sh")
+        .arg("-c")
+        .arg("xrandr | awk '/current/ { print $8,$9,$10 }'")
+        .output()
+        .ok()?;
+
+    if output.status.success() {
+        let result = String::from_utf8_lossy(&output.stdout);
+        Some(result.trim().to_string())
+    } else {
+        None
+    }
+}
+
 pub(super) async fn check_init() -> ResultType<()> {
     if !scrap::is_x11() {
         let mut minx = 0;
         let mut maxx = 0;
         let mut miny = 0;
         let mut maxy = 0;
-
         if *CAP_DISPLAY_INFO.read().unwrap() == 0 {
             let mut lock = CAP_DISPLAY_INFO.write().unwrap();
             if *lock == 0 {
                 let all = Display::all()?;
                 let num = all.len();
+                write_log(&format!("num: {}", num));
                 let (primary, mut displays) = super::video_service::get_displays_2(&all);
                 for display in displays.iter_mut() {
                     display.cursor_embedded = is_cursor_embedded();
                 }
 
                 let mut rects: Vec<((i32, i32), usize, usize)> = Vec::new();
+                let mut i = 0;
                 for d in &all {
                     rects.push((d.origin(), d.width(), d.height()));
+                    i+=1;
+                    write_log(&format!("i: {}", i));
                 }
 
                 let (ndisplay, current, display) =
@@ -150,11 +183,31 @@ pub(super) async fn check_init() -> ResultType<()> {
                     num_cpus::get_physical(),
                     num_cpus::get(),
                 );
+                write_log(&format!(
+                    "#displays={}, current={}, origin: {:?}, width={}, height={}, cpus={}/{}",
+                    ndisplay,
+                    current,
+                    &origin,
+                    width,
+                    height,
+                    num_cpus::get_physical(),
+                    num_cpus::get(),
+                ));
 
-                minx = origin.0;
-                maxx = origin.0 + width as i32;
-                miny = origin.1;
-                maxy = origin.1 + height as i32;
+                let (max_width, max_height) = match get_max_desktop_resolution() {
+                    Some(result) if !result.is_empty() => {
+                        let resolution: Vec<&str> = result.split(" ").collect();
+                        let w: i32 = resolution[0].parse().unwrap_or(origin.0 + width as i32);
+                        let h: i32 = resolution[2].trim_end_matches(",").parse().unwrap_or(origin.1 + height as i32);
+                        (w, h)
+                    }
+                    _ => (width as i32,  height as i32)
+                };
+            
+                minx = 0;
+                maxx = max_width;
+                miny = 0;
+                maxy = max_height;
 
                 let capturer = Box::into_raw(Box::new(
                     Capturer::new(display, true).with_context(|| "Failed to create capturer")?,
@@ -180,6 +233,10 @@ pub(super) async fn check_init() -> ResultType<()> {
                 miny,
                 maxy
             );
+            write_log(&format!(
+                "update mouse resolution: ({}, {}), ({}, {})",
+                minx, maxx, miny, maxy
+            ));
             allow_err!(input_service::update_mouse_resolution(minx, maxx, miny, maxy).await);
         }
     }
