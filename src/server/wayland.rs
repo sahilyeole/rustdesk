@@ -201,7 +201,7 @@ pub(super) async fn check_init() -> ResultType<()> {
                         let h: i32 = resolution[2].trim_end_matches(",").parse().unwrap_or(origin.1 + height as i32);
                         (w, h)
                     }
-                    _ => (width as i32,  height as i32)
+                    _ => (origin.0 + width as i32, origin.1 + height as i32)
                 };
             
                 minx = 0;
