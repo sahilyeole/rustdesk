@@ -112,7 +112,6 @@ pub(super) fn is_inited() -> Option<Message> {
         None
     } else {
         let test = Display::all().unwrap();
-        write_log(&format!("test: {}", test.len()));
         if *CAP_DISPLAY_INFO.read().unwrap() == 0 {
             let mut msg_out = Message::new();
             let res = MessageBox {
@@ -156,7 +155,6 @@ pub(super) async fn check_init() -> ResultType<()> {
             if *lock == 0 {
                 let all = Display::all()?;
                 let num = all.len();
-                write_log(&format!("num: {}", num));
                 let (primary, mut displays) = super::video_service::get_displays_2(&all);
                 for display in displays.iter_mut() {
                     display.cursor_embedded = is_cursor_embedded();
@@ -167,7 +165,6 @@ pub(super) async fn check_init() -> ResultType<()> {
                 for d in &all {
                     rects.push((d.origin(), d.width(), d.height()));
                     i+=1;
-                    write_log(&format!("i: {}", i));
                 }
 
                 let (ndisplay, current, display) =
@@ -183,16 +180,6 @@ pub(super) async fn check_init() -> ResultType<()> {
                     num_cpus::get_physical(),
                     num_cpus::get(),
                 );
-                write_log(&format!(
-                    "#displays={}, current={}, origin: {:?}, width={}, height={}, cpus={}/{}",
-                    ndisplay,
-                    current,
-                    &origin,
-                    width,
-                    height,
-                    num_cpus::get_physical(),
-                    num_cpus::get(),
-                ));
 
                 let (max_width, max_height) = match get_max_desktop_resolution() {
                     Some(result) if !result.is_empty() => {
@@ -233,10 +220,6 @@ pub(super) async fn check_init() -> ResultType<()> {
                 miny,
                 maxy
             );
-            write_log(&format!(
-                "update mouse resolution: ({}, {}), ({}, {})",
-                minx, maxx, miny, maxy
-            ));
             allow_err!(input_service::update_mouse_resolution(minx, maxx, miny, maxy).await);
         }
     }

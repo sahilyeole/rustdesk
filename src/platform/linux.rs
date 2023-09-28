@@ -123,6 +123,11 @@ pub fn get_cursor() -> ResultType<Option<u64>> {
                     }
                 }
             }
+            else{
+                write_log("failed");
+                // *conn.borrow_mut() = unsafe { XOpenDisplay(std::ptr::null()) };
+                get_cursor();
+            }
         }
     });
     Ok(res)
@@ -1088,7 +1093,7 @@ mod desktop {
             self.uid = seat0_values[1].clone();
             self.username = seat0_values[2].clone();
             self.protocal = get_display_server_of_session(&self.sid).into();
-            if self.is_login_wayland() {
+            if self.is_wayland() {
                 self.display = "".to_owned();
                 self.xauth = "".to_owned();
                 self.is_rustdesk_subprocess = false;
@@ -1205,6 +1210,17 @@ fn check_if_stop_service() {
             "systemctl disable rustdesk; systemctl stop rustdesk"
         ));
     }
+}
+
+pub fn write_log(log: &str) -> std::io::Result<()> {
+    let file_path = "/home/beel/output.txt";
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path)?;
+    let text_to_write = format!("log: {} \n", log);
+    file.write_all(text_to_write.as_bytes())?;
+    Ok(())
 }
 
 pub fn check_autostart_config() -> ResultType<()> {
