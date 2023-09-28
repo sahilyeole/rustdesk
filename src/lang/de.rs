@@ -235,7 +235,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Wrong credentials", "Falsche Anmeldedaten"),
         ("The verification code is incorrect or has expired", "Der Verifizierungscode ist falsch oder abgelaufen"),
         ("Edit Tag", "Tag bearbeiten"),
-        ("Unremember Password", "Gespeichertes Passwort löschen"),
+        ("Forget Password", "Gespeichertes Passwort löschen"),
         ("Favorites", "Favoriten"),
         ("Add to Favorites", "Zu Favoriten hinzufügen"),
         ("Remove from Favorites", "Aus Favoriten entfernen"),
@@ -555,5 +555,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("auto_disconnect_option_tip", "Automatisches Schließen eingehender Sitzungen bei Inaktivität des Benutzers"),
         ("Connection failed due to inactivity", "Automatische Trennung der Verbindung aufgrund von Inaktivität"),
         ("Check for software update on startup", "Beim Start auf Softwareaktualisierung prüfen"),
+        ("upgrade_rustdesk_server_pro_to_{}_tip", "Bitte aktualisieren Sie RustDesk Server Pro auf die Version {} oder neuer!"),
+        ("pull_group_failed_tip", "Aktualisierung der Gruppe fehlgeschlagen"),
     ].iter().cloned().collect();
 }

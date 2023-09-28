@@ -235,7 +235,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Wrong credentials", "Nama pengguna atau kata sandi salah"),
         ("The verification code is incorrect or has expired", "Kode verifikasi salah atau sudah kadaluarsa"),
         ("Edit Tag", "Ubah Tag"),
-        ("Unremember Password", "Lupakan Kata Sandi"),
+        ("Forget Password", "Lupakan Kata Sandi"),
         ("Favorites", "Favorit"),
         ("Add to Favorites", "Tambah ke Favorit"),
         ("Remove from Favorites", "Hapus dari favorit"),
@@ -473,7 +473,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("empty_favorite_tip", "Belum ada rekan favorit?\nTemukan seseorang untuk terhubung dan tambahkan ke favorit!"),
         ("empty_lan_tip", "Sepertinya kami belum menemukan rekan"),
         ("empty_address_book_tip", "Tampaknya saat ini tidak ada rekan yang terdaftar dalam buku alamat Anda"),
-        ("eg: admin", ""),
+        ("eg: admin", "contoh: admin"),
         ("Empty Username", "Nama pengguna kosong"),
         ("Empty Password", "Kata sandi kosong"),
         ("Me", "Saya"),
@@ -555,5 +555,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("auto_disconnect_option_tip", "Secara otomatis akan menutup sesi ketika pengguna tidak beraktivitas"),
         ("Connection failed due to inactivity", "Secara otomatis akan terputus ketik tidak ada aktivitas."),
         ("Check for software update on startup", "Periksa pembaruan aplikasi saat sistem dinyalakan."),
+        ("upgrade_rustdesk_server_pro_to_{}_tip", "Silahkan perbarui RustDesk Server Pro ke versi {} atau yang lebih baru!"),
+        ("pull_group_failed_tip", "Gagal memperbarui grup"),
     ].iter().cloned().collect();
 }

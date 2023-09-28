@@ -727,7 +727,7 @@ abstract class BasePeerCard extends StatelessWidget {
   MenuEntryBase<String> _unrememberPasswordAction(String id) {
     return MenuEntryButton<String>(
       childBuilder: (TextStyle? style) => Text(
-        translate('Unremember Password'),
+        translate('Forget Password'),
         style: style,
       ),
       proc: () async {
@@ -1093,17 +1093,22 @@ class MyGroupPeerCard extends BasePeerCard {
       menuItems.add(_tcpTunnelingAction(context, peer.id));
     }
     // menuItems.add(await _openNewConnInOptAction(peer.id));
-    menuItems.add(await _forceAlwaysRelayAction(peer.id));
+    // menuItems.add(await _forceAlwaysRelayAction(peer.id));
     if (peer.platform == 'Windows') {
       menuItems.add(_rdpAction(context, peer.id));
     }
     if (Platform.isWindows) {
       menuItems.add(_createShortCutAction(peer.id));
     }
-    menuItems.add(MenuEntryDivider());
-    menuItems.add(_renameAction(peer.id));
-    if (await bind.mainPeerHasPassword(id: peer.id)) {
-      menuItems.add(_unrememberPasswordAction(peer.id));
+    // menuItems.add(MenuEntryDivider());
+    // menuItems.add(_renameAction(peer.id));
+    // if (await bind.mainPeerHasPassword(id: peer.id)) {
+    //   menuItems.add(_unrememberPasswordAction(peer.id));
+    // }
+    if (gFFI.userModel.userName.isNotEmpty) {
+      if (!gFFI.abModel.idContainBy(peer.id)) {
+        menuItems.add(_addToAb(peer));
+      }
     }
     return menuItems;
   }

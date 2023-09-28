@@ -8,6 +8,7 @@ import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hbb/consts.dart';
+import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
 import 'package:flutter_hbb/generated_bridge.dart';
 import 'package:flutter_hbb/models/ab_model.dart';
 import 'package:flutter_hbb/models/chat_model.dart';
@@ -202,11 +203,11 @@ class FfiModel with ChangeNotifier {
     }, sessionId, peerId);
     updatePrivacyMode(data.updatePrivacyMode, sessionId, peerId);
     setConnectionType(peerId, data.secure, data.direct);
-    handlePeerInfo(data.peerInfo, peerId);
+    await handlePeerInfo(data.peerInfo, peerId);
     for (var element in data.cursorDataList) {
-      handleCursorData(element);
+      await handleCursorData(element);
     }
-    handleCursorId(data.lastCursorId);
+    await handleCursorId(data.lastCursorId);
   }
 
   // todo: why called by two position
@@ -265,8 +266,6 @@ class FfiModel with ChangeNotifier {
         updateBlockInputState(evt, peerId);
       } else if (name == 'update_privacy_mode') {
         updatePrivacyMode(evt, sessionId, peerId);
-      } else if (name == 'alias') {
-        handleAliasChanged(evt);
       } else if (name == 'show_elevation') {
         final show = evt['show'].toString() == 'true';
         parent.target?.serverModel.setShowElevation(show);
@@ -350,13 +349,6 @@ class FfiModel with ChangeNotifier {
   /// Bind the event listener to receive events from the Rust core.
   updateEventListener(SessionID sessionId, String peerId) {
     platformFFI.setEventCallback(startEventListener(sessionId, peerId));
-  }
-
-  handleAliasChanged(Map<String, dynamic> evt) {
-    final rxAlias = PeerStringOption.find(evt['id'], 'alias');
-    if (rxAlias.value != evt['alias']) {
-      rxAlias.value = evt['alias'];
-    }
   }
 
   _updateCurDisplay(SessionID sessionId, Display newDisplay) {
@@ -1797,7 +1789,7 @@ class FFI {
             debugPrint('Unreachable, the cached data cannot be decoded.');
             return;
           }
-          ffiModel.handleCachedPeerData(data, id);
+          await ffiModel.handleCachedPeerData(data, id);
           await bind.sessionRefresh(sessionId: sessionId);
         });
         isToNewWindowNotified.value = true;

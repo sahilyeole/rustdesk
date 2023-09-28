@@ -235,7 +235,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Wrong credentials", "提供的登录信息错误"),
         ("The verification code is incorrect or has expired", "验证码错误或已超时"),
         ("Edit Tag", "修改标签"),
-        ("Unremember Password", "忘记密码"),
+        ("Forget Password", "忘记密码"),
         ("Favorites", "收藏"),
         ("Add to Favorites", "加入到收藏"),
         ("Remove from Favorites", "从收藏中删除"),
@@ -535,8 +535,8 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("List View", "列表视图"),
         ("Select", "选择"),
         ("Toggle Tags", "切换标签"),
-        ("pull_ab_failed_tip", "未成功获取地址簿"),
-        ("push_ab_failed_tip", "未成功上传地址簿"),
+        ("pull_ab_failed_tip", "获取地址簿失败"),
+        ("push_ab_failed_tip", "上传地址簿失败"),
         ("synced_peer_readded_tip", "最近会话中存在的设备将会被重新同步到地址簿。"),
         ("Change Color", "更改颜色"),
         ("Primary Color", "基本色"),
@@ -555,5 +555,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("auto_disconnect_option_tip", "自动关闭不活跃的会话"),
         ("Connection failed due to inactivity", "由于长时间无操作, 连接被自动断开"),
         ("Check for software update on startup", "启动时检查软件更新"),
+        ("upgrade_rustdesk_server_pro_to_{}_tip", "请升级专业版服务器到{}或更高版本！"),
+        ("pull_group_failed_tip", "获取组信息失败"),
     ].iter().cloned().collect();
 }

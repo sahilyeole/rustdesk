@@ -130,6 +130,7 @@ pub(super) fn is_inited() -> Option<Message> {
 }
 
 fn get_max_desktop_resolution() -> Option<String> {
+    // works with Xwayland
     let output: Output = Command::new("sh")
         .arg("-c")
         .arg("xrandr | awk '/current/ { print $8,$9,$10 }'")

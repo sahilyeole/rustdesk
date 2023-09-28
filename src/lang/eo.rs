@@ -235,7 +235,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("Wrong credentials", "Identigilo aŭ pasvorto erara"),
         ("The verification code is incorrect or has expired", ""),
         ("Edit Tag", "Redakti etikedo"),
-        ("Unremember Password", "Forgesi pasvorton"),
+        ("Forget Password", "Forgesi pasvorton"),
         ("Favorites", "Favorataj"),
         ("Add to Favorites", "Aldoni al la favorataj"),
         ("Remove from Favorites", "Forigi el la favorataj"),
@@ -555,5 +555,7 @@ pub static ref T: std::collections::HashMap<&'static str, &'static str> =
         ("auto_disconnect_option_tip", ""),
         ("Connection failed due to inactivity", ""),
         ("Check for software update on startup", ""),
+        ("upgrade_rustdesk_server_pro_to_{}_tip", ""),
+        ("pull_group_failed_tip", ""),
     ].iter().cloned().collect();
 }
