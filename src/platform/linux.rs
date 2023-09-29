@@ -126,7 +126,7 @@ pub fn get_cursor() -> ResultType<Option<u64>> {
             else{
                 write_log("failed");
                 // *conn.borrow_mut() = unsafe { XOpenDisplay(std::ptr::null()) };
-                get_cursor();
+                // get_cursor();
             }
         }
     });
