@@ -1803,6 +1803,10 @@ Future<bool> initUniLinks() async {
     if (initialLink == null) {
       return false;
     }
+    if (isMobile){
+      handleUriLinkMobile(initialLink);
+      return true;
+    }
     return handleUriLink(uriString: initialLink);
   } catch (err) {
     debugPrintStack(label: "$err");
@@ -1823,10 +1827,15 @@ StreamSubscription? listenUniLinks({handleByFlutter = true}) {
   final sub = uriLinkStream.listen((Uri? uri) {
     debugPrint("A uri was received: $uri. handleByFlutter $handleByFlutter");
     if (uri != null) {
-      if (handleByFlutter) {
-        handleUriLink(uri: uri);
-      } else {
-        bind.sendUrlScheme(url: uri.toString());
+      if (!isMobile){
+        if (handleByFlutter) {
+          handleUriLink(uri: uri);
+        } else {
+          bind.sendUrlScheme(url: uri.toString());
+        }
+      }
+      else {
+        handleUriLinkMobile(uri.toString());
       }
     } else {
       print("uni listen error: uri is empty.");
@@ -1842,6 +1851,14 @@ enum UriLinkType {
   fileTransfer,
   portForward,
   rdp,
+}
+
+void handleUriLinkMobile(String uri) {
+  var context = Get.context;
+  var uri_id = uri.split("//").last;
+  if (context != null && uri_id.isNotEmpty){
+    connect(context, uri_id);
+  }
 }
 
 // uri link handler
