@@ -261,8 +261,7 @@ dependencies = [
 [[package]]
 name = "arboard"
 version = "3.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aafb29b107435aa276664c1db8954ac27a6e105cdad3c88287a199eb0e313c08"
+source = "git+https://github.com/sahilyeole/arboard#75363cb2012dc899f8594c197acb16063c695a71"
 dependencies = [
  "clipboard-win",
  "core-graphics 0.22.3",
