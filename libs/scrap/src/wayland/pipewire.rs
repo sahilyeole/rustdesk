@@ -16,7 +16,7 @@ use gstreamer as gst;
 use gstreamer::prelude::*;
 use gstreamer_app::AppSink;
 
-use hbb_common::config;
+use hbb_common::{config, log};
 
 use super::capturable::PixelProvider;
 use super::capturable::{Capturable, Recorder};
@@ -223,27 +223,36 @@ impl PipeWireRecorder {
 
 impl Recorder for PipeWireRecorder {
     fn capture(&mut self, timeout_ms: u64) -> Result<PixelProvider, Box<dyn Error>> {
+        log::info!("calling capture");
         if let Some(sample) = self
             .appsink
             .try_pull_sample(gst::ClockTime::from_mseconds(timeout_ms))
         {
             let cap = sample
                 .get_caps()
-                .ok_or("Failed get caps")?
+                .ok_or(
+                    log::error!("Failed get caps")
+                ).unwrap()
                 .get_structure(0)
-                .ok_or("Failed to get structure")?;
+                .ok_or(
+                    log::error!("Failed to get structure")
+                ).unwrap();
             let w: i32 = cap.get_value("width")?.get_some()?;
             let h: i32 = cap.get_value("height")?.get_some()?;
             let w = w as usize;
             let h = h as usize;
             self.pix_fmt = cap
                 .get::<&str>("format")?
-                .ok_or("Failed to get pixel format")?
+                .ok_or(
+                    log::error!("Failed to get format")
+                ).unwrap()
                 .to_string();
 
             let buf = sample
                 .get_buffer_owned()
-                .ok_or_else(|| GStreamerError("Failed to get owned buffer.".into()))?;
+                .ok_or_else(
+                || log::error!("Failed to get buffer")
+                ).unwrap();
             let mut crop = buf
                 .get_meta::<gstreamer_video::VideoCropMeta>()
                 .map(|m| m.get_rect());
@@ -253,8 +262,11 @@ impl Recorder for PipeWireRecorder {
             }
             let buf = buf
                 .into_mapped_buffer_readable()
-                .map_err(|_| GStreamerError("Failed to map buffer.".into()))?;
+                .map_err(
+                    |_| log::error!("Failed to map buffer")
+                ).unwrap();
             if let Err(..) = crate::would_block_if_equal(&mut self.saved_raw_data, buf.as_slice()) {
+                log::error!("Failed to compare buffers");
                 return Ok(PixelProvider::NONE);
             }
             let buf_size = buf.get_size();
@@ -263,8 +275,14 @@ impl Recorder for PipeWireRecorder {
                 // for some reason the width and height of the caps do not guarantee correct buffer
                 // size, so ignore those buffers, see:
                 // https://gitlab.freedesktop.org/pipewire/pipewire/-/issues/985
-                trace!(
-                    "Size of mapped buffer: {} does NOT match size of capturable {}x{}@BGRx, \
+                // trace!(
+                //     "Size of mapped buffer: {} does NOT match size of capturable {}x{}@BGRx, \
+                //     dropping it!",
+                //     buf_size,
+                //     w,
+                //     h
+                // );
+                    log::error!("Size of mapped buffer: {} does NOT match size of capturable {}x{}@BGRx, \
                     dropping it!",
                     buf_size,
                     w,
@@ -299,6 +317,7 @@ impl Recorder for PipeWireRecorder {
             return Ok(PixelProvider::NONE);
         }
         if self.buffer.is_none() {
+            log::error!("No buffer available!");
             return Err(Box::new(GStreamerError("No buffer available!".into())));
         }
         let buf = if self.is_cropped {
@@ -306,16 +325,22 @@ impl Recorder for PipeWireRecorder {
         } else {
             self.buffer
                 .as_ref()
-                .ok_or("Failed to get buffer as ref")?
+                .ok_or(
+                    log::error!("No buffer available 2")
+                ).unwrap()
                 .as_slice()
         };
         match self.pix_fmt.as_str() {
             "BGRx" => Ok(PixelProvider::BGR0(self.width, self.height, buf)),
             "RGBx" => Ok(PixelProvider::RGB0(self.width, self.height, buf)),
-            _ => Err(Box::new(GStreamerError(format!(
+            _ => {
+                log::error!("Unreachable! Unknown pix_fmt, {}", &self.pix_fmt);
+            Err(Box::new(GStreamerError(format!(
                 "Unreachable! Unknown pix_fmt, {}",
                 &self.pix_fmt
-            )))),
+            ))))
+            }
+            ,
         }
     }
 }
