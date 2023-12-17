@@ -313,6 +313,7 @@ impl Recorder for PipeWireRecorder {
                 self.buffer = Some(buf);
             }
         } else {
+            log::error!("Failed to pull sample from appsink");
             return Ok(PixelProvider::NONE);
         }
         if self.buffer.is_none() {
