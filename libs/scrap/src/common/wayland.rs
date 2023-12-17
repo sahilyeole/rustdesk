@@ -1,3 +1,5 @@
+use hbb_common::log;
+
 use crate::common::{x11::Frame, TraitCapturer};
 use crate::wayland::{capturable::*, *};
 use std::{io, sync::RwLock, time::Duration};
@@ -15,8 +17,10 @@ pub fn set_map_err(f: fn(err: String) -> io::Error) {
 
 fn map_err<E: ToString>(err: E) -> io::Error {
     if let Some(f) = *MAP_ERR.read().unwrap() {
+        log::error!("{}", err.to_string());
         f(err.to_string())
     } else {
+        log::error!("{}", err.to_string());
         io::Error::new(io::ErrorKind::Other, err.to_string())
     }
 }
@@ -42,7 +46,10 @@ impl TraitCapturer for Capturer {
             PixelProvider::BGR0(w, h, x) => Ok(Frame::new(x, crate::Pixfmt::BGRA, w, h)),
             PixelProvider::RGB0(w, h, x) => Ok(Frame::new(x, crate::Pixfmt::RGBA, w,h)),
             PixelProvider::NONE => Err(std::io::ErrorKind::WouldBlock.into()),
-            _ => Err(map_err("Invalid data")),
+            _ => {
+            log::error!("Invalid data");
+            Err(map_err("Invalid data"))
+            }
         }
     }
 }
