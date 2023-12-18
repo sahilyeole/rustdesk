@@ -227,6 +227,7 @@ impl Recorder for PipeWireRecorder {
             .appsink
             .pull_sample()
         {
+            log::debug!("reached 1");
             let cap = sample
                 .get_caps()
                 .ok_or(
@@ -236,8 +237,10 @@ impl Recorder for PipeWireRecorder {
                 .ok_or(
                     log::error!("Failed to get structure")
                 ).unwrap();
+            log::debug!("reached 2");
             let w: i32 = cap.get_value("width")?.get_some()?;
             let h: i32 = cap.get_value("height")?.get_some()?;
+            log::debug!("reached 3");
             let w = w as usize;
             let h = h as usize;
             self.pix_fmt = cap
@@ -247,27 +250,33 @@ impl Recorder for PipeWireRecorder {
                 ).unwrap()
                 .to_string();
 
+            log::debug!("reached 4");
             let buf = sample
                 .get_buffer_owned()
                 .ok_or_else(
                 || log::error!("Failed to get buffer")
                 ).unwrap();
+            log::debug!("reached 41");
             let mut crop = buf
                 .get_meta::<gstreamer_video::VideoCropMeta>()
                 .map(|m| m.get_rect());
+            log::debug!("reached 42");
             // only crop if necessary
             if Some((0, 0, w as u32, h as u32)) == crop {
                 crop = None;
             }
+            log::debug!("reached 5");
             let buf = buf
                 .into_mapped_buffer_readable()
                 .map_err(
                     |_| log::error!("Failed to map buffer")
                 ).unwrap();
+            log::debug!("reached 6");
             if let Err(..) = crate::would_block_if_equal(&mut self.saved_raw_data, buf.as_slice()) {
                 log::error!("Failed to compare buffers");
                 return Ok(PixelProvider::NONE);
             }
+            log::debug!("reached 7");
             let buf_size = buf.get_size();
             // BGRx is 4 bytes per pixel
             if buf_size != (w * h * 4) {
@@ -287,9 +296,11 @@ impl Recorder for PipeWireRecorder {
                     w,
                     h
                 );
+            log::debug!("reached 72");
             } else {
                 // Copy region specified by crop into self.buffer_cropped
                 // TODO: Figure out if ffmpeg provides a zero copy alternative
+            log::debug!("reached 8");
                 if let Some((x_off, y_off, w_crop, h_crop)) = crop {
                     let x_off = x_off as usize;
                     let y_off = y_off as usize;
@@ -305,14 +316,18 @@ impl Recorder for PipeWireRecorder {
                     }
                     self.width = w_crop;
                     self.height = h_crop;
+                log::debug!("reached 9");
                 } else {
                     self.width = w;
                     self.height = h;
+            log::debug!("reached 10");
                 }
                 self.is_cropped = crop.is_some();
                 self.buffer = Some(buf);
+                log::debug!("reached 11");
             }
         } else {
+                log::debug!("reached 12");
             log::error!("Failed to pull sample from appsink");
             return Ok(PixelProvider::NONE);
         }
@@ -321,8 +336,10 @@ impl Recorder for PipeWireRecorder {
             return Err(Box::new(GStreamerError("No buffer available!".into())));
         }
         let buf = if self.is_cropped {
+                log::debug!("reached 13");
             self.buffer_cropped.as_slice()
         } else {
+            log::debug!("reached 14");
             self.buffer
                 .as_ref()
                 .ok_or(
@@ -330,6 +347,7 @@ impl Recorder for PipeWireRecorder {
                 ).unwrap()
                 .as_slice()
         };
+        log::debug!("pix_fmt: {}", &self.pix_fmt);
         match self.pix_fmt.as_str() {
             "BGRx" => Ok(PixelProvider::BGR0(self.width, self.height, buf)),
             "RGBx" => Ok(PixelProvider::RGB0(self.width, self.height, buf)),
@@ -348,6 +366,7 @@ impl Recorder for PipeWireRecorder {
 impl Drop for PipeWireRecorder {
     fn drop(&mut self) {
         if let Err(err) = self.pipeline.set_state(gst::State::Null) {
+            log::error!("Failed to stop GStreamer pipeline: {}.", err);
             warn!("Failed to stop GStreamer pipeline: {}.", err);
         }
     }
