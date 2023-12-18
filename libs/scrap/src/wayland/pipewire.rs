@@ -223,6 +223,7 @@ impl PipeWireRecorder {
 
 impl Recorder for PipeWireRecorder {
     fn capture(&mut self, timeout_ms: u64) -> Result<PixelProvider, Box<dyn Error>> {
+        log::debug!("call to capture");
         if let Ok(sample) = self
             .appsink
             .pull_sample()
