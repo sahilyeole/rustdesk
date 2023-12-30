@@ -95,6 +95,7 @@ pub const LOGIN_MSG_PASSWORD_WRONG: &str = "Wrong Password";
 pub const LOGIN_MSG_NO_PASSWORD_ACCESS: &str = "No Password Access";
 pub const LOGIN_MSG_OFFLINE: &str = "Offline";
 pub const LOGIN_SCREEN_WAYLAND: &str = "Wayland login screen is not supported";
+pub const LOGIN_MSG_WINDOWS_MULTIPLE_SESSIONS: &str = "Multiple active sessions found on Windows";
 #[cfg(target_os = "linux")]
 pub const SCRAP_UBUNTU_HIGHER_REQUIRED: &str = "Wayland requires Ubuntu 21.04 or higher version.";
 #[cfg(target_os = "linux")]
@@ -2441,7 +2442,15 @@ lazy_static::lazy_static! {
             text: "Please wait for the remote side to accept your session request...",
             link: "",
             try_again: true,
-        })]);
+        }), (LOGIN_MSG_WINDOWS_MULTIPLE_SESSIONS, LoginErrorMsgBox{
+            msgtype: "wait-windows-multiple-sessions",
+            title: "Multiple active sessions found",
+            text: "Please select the session you want to connect to",
+            link: "",
+            try_again: false,
+        }
+        )
+        ]);
         Arc::new(map)
     };
 }

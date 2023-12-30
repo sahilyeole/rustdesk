@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -966,6 +967,38 @@ void showWaitAcceptDialog(SessionID sessionId, String type, String title,
   });
 }
 
+void showWindowsSessionsDialog(String type, String title, String text,
+    OverlayDialogManager dialogManager, SessionID sessionId) {
+      // String value = bind.mainGetLocalOption(key: "selected_windows_session");
+      final file = File('C:\\Users\\Sahil\\Documents\\rd_tmp.txt');
+      if (!file.existsSync()) {
+          print('File does not exist');
+          return;
+        }
+        final contents = file.readAsStringSync();
+      if (contents != ""){
+        return;
+      }
+  dialogManager.dismissAll();
+  dialogManager.show((setState, close, context) {
+    onConnect() {
+        bind.sessionReconnect(sessionId: sessionId, forceRelay: false);
+    dialogManager.dismissAll();
+    dialogManager.showLoading(translate('Connecting...'),
+        onCancel: closeConnection);
+    }
+
+    return CustomAlertDialog(
+      title: null,
+      content: msgboxContent(type, title, text),
+      actions: [
+        SessionsDropdown(),
+        dialogButton('Connect', onPressed: onConnect, isOutline: true),
+      ],
+    );
+  });
+}
+
 void showRestartRemoteDevice(PeerInfo pi, String id, SessionID sessionId,
     OverlayDialogManager dialogManager) async {
   final res = await dialogManager
@@ -1484,4 +1517,77 @@ void renameDialog(
       onCancel: cancel,
     );
   });
+}
+
+class SessionsDropdown extends StatefulWidget {
+  @override
+  _SessionsDropdownState createState() => _SessionsDropdownState();
+}
+
+List<String> get_win_sids(){
+  // final str = bind.mainGetLocalOption(key: "win_active_sids");
+  String content = File('C:\\Users\\Sahil\\Documents\\sid_tmp.txt').readAsStringSync();
+    List<String> myList = content.split(',');
+    return myList;
+}
+
+List<String> get_win_unames(){
+  // final str = bind.mainGetLocalOption(key: "win_active_unames");
+  String content = File('C:\\Users\\Sahil\\Documents\\uname_tmp.txt').readAsStringSync();
+    List<String> myList = content.split(','); 
+    return myList;
+}
+
+
+class _SessionsDropdownState extends State<SessionsDropdown> {
+  late String selectedValue;
+  late List<String> sessions;
+  late File file;
+  late List<String> unames;
+
+  @override
+  void initState() {
+    super.initState();
+    sessions = get_win_sids();
+    selectedValue = sessions[0];
+    unames = get_win_unames();
+
+    bind.mainSetLocalOption(
+        key: 'selected_windows_session', value: selectedValue.toString());
+
+          file = File('C:\\Users\\Sahil\\Documents\\rd_tmp.txt');
+                file.writeAsStringSync(selectedValue.toString());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    print(sessions);
+    return Container(
+        width: 300,
+        child: DropdownButton(
+          value: selectedValue,
+          isExpanded: true,
+          borderRadius: BorderRadius.circular(8),
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          items: sessions.map((session) {
+            return DropdownMenuItem(
+              value: session,
+              child: Text(unames[sessions.indexOf(session)]),
+            );
+          }).toList(),
+          onChanged: (value) {
+            setState(() {
+              selectedValue = value.toString();
+            });
+                bind.mainSetLocalOption(
+        key: 'selected_windows_session', value: value.toString());
+            print(value);
+            file.writeAsStringSync(value.toString());
+          },
+          style: TextStyle(
+            fontSize: 16.0,
+          ),
+        )
+        );
+  }
 }

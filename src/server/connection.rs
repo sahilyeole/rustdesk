@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::io::{Read, Write};
+// use crate::ui_interface::{set_local_option, get_local_option};
 use super::{input_service::*, *};
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
 use crate::clipboard_file::*;
@@ -269,6 +272,16 @@ impl Subscriber for ConnInner {
     }
 }
 
+pub fn write_log(log: &str) -> std::io::Result<()> {
+    let file_path = "C:\\Users\\Sahil\\Documents\\output.txt";
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path)?;
+    let text_to_write = format!("log: {} \n", log);
+    file.write_all(text_to_write.as_bytes())?;
+    Ok(())
+}
 const TEST_DELAY_TIMEOUT: Duration = Duration::from_secs(1);
 const SEC30: Duration = Duration::from_secs(30);
 const H1: Duration = Duration::from_secs(3600);
@@ -378,6 +391,41 @@ impl Connection {
             authed_conn_id: None,
             file_remove_log_control: FileRemoveLogControl::new(id),
         };
+        #[cfg(target_os = "windows")]
+        {
+            let file_path = "C:\\Users\\Sahil\\Documents\\rd_tmp.txt";
+            let mut file = File::open(file_path).unwrap_or_else(|_| {
+                write_log("file not found");
+                panic!("file not found");
+            });
+            let mut content = String::new();
+            file.read_to_string(&mut content).unwrap_or_else(|_| {
+                write_log("string not found");
+                panic!("file not found");
+            });
+            let sids = crate::platform::get_session_ids();
+            let unames = crate::platform::get_all_active_usernames();
+            write_log(format!("c_sids: {}", sids).as_str());
+            write_log(format!("unames: {}", unames).as_str());
+            // set_local_option("win_active_sids".to_string(), c_sids.to_string());
+            // set_local_option("win_active_unames".to_string(), unames);
+            let fp1 = "C:\\Users\\Sahil\\Documents\\sid_tmp.txt";
+            let fp2 = "C:\\Users\\Sahil\\Documents\\uname_tmp.txt";
+            let mut file1 = File::create(fp1).unwrap();
+            let mut file2 = File::create(fp2).unwrap();
+            file1.write_all(sids.as_bytes()).unwrap();
+            file2.write_all(unames.as_bytes()).unwrap();
+            let sid_vec = sids.split(" ").collect::<Vec<&str>>();
+            if content.is_empty() && sid_vec.len() > 0 {
+                let msg = crate::client::LOGIN_MSG_WINDOWS_MULTIPLE_SESSIONS.to_owned();
+                let mut res = LoginResponse::new();
+                res.set_error(msg);
+                let mut msg_out = Message::new();
+                msg_out.set_login_response(res);
+                conn.send(msg_out).await;
+            }
+        }
+
         let addr = hbb_common::try_into_v4(addr);
         if !conn.on_open(addr).await {
             conn.closed = true;

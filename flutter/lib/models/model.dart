@@ -520,6 +520,8 @@ class FfiModel with ChangeNotifier {
       showRelayHintDialog(sessionId, type, title, text, dialogManager, peerId);
     } else if (text == 'Connected, waiting for image...') {
       showConnectedWaitingForImage(dialogManager, sessionId, type, title, text);
+    } else if (type == 'wait-windows-multiple-sessions'){
+      showWindowsSessionsDialog(type, title, text, dialogManager, sessionId);
     } else {
       var hasRetry = evt['hasRetry'] == 'true';
       showMsgBox(sessionId, type, title, text, link, hasRetry, dialogManager);

@@ -1,10 +1,15 @@
 use super::{CursorData, ResultType};
 use crate::common::PORTABLE_APPNAME_RUNTIME_ENV_KEY;
+// use crate::ui_interface::{get_local_option, set_local_option};
 use crate::{
     ipc,
     license::*,
     privacy_mode::win_topmost_window::{self, WIN_TOPMOST_INJECTED_PROCESS_EXE},
 };
+use hbb_common::libc::{c_int, wchar_t};
+use std::fs::File;
+use std::io::{Read, Write};
+
 use hbb_common::{
     allow_err,
     anyhow::anyhow,
@@ -427,6 +432,17 @@ fn service_main(arguments: Vec<OsString>) {
     }
 }
 
+pub fn write_log(log: &str) -> std::io::Result<()> {
+    let file_path = "C:\\Users\\Sahil\\Documents\\output.txt";
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file_path)?;
+    let text_to_write = format!("log: {} \n", log);
+    file.write_all(text_to_write.as_bytes())?;
+    Ok(())
+}
+
 pub fn start_os_service() {
     if let Err(e) =
         windows_service::service_dispatcher::start(crate::get_app_name(), ffi_service_main)
@@ -508,8 +524,46 @@ async fn run_service(_arguments: Vec<OsString>) -> ResultType<()> {
     log::info!("session id {}", session_id);
     let mut h_process = launch_server(session_id, true).await.unwrap_or(NULL);
     let mut incoming = ipc::new_listener(crate::POSTFIX_SERVICE).await?;
+    let file_path = "C:\\Users\\Sahil\\Documents\\rd_tmp.txt";
+    let mut file = File::create(file_path).unwrap();
+    file.write_all("".as_bytes())?;
+    let fp1 = "C:\\Users\\Sahil\\Documents\\sid_tmp.txt";
+    let fp2 = "C:\\Users\\Sahil\\Documents\\uname_tmp.txt";
+    let mut file1 = File::create(fp1).unwrap();
+    let mut file2 = File::create(fp2).unwrap();
+    file1.write_all("".as_bytes())?;
+    file2.write_all("".as_bytes())?;
+    let mut val = 9999;
     loop {
+        let mut file = File::open(file_path).unwrap_or_else(|_| {
+            write_log("file not found");
+            panic!("file not found");
+        });
+        let mut content = String::new();
+        file.read_to_string(&mut content).unwrap_or(9999);
+
         let res = timeout(super::SERVICE_INTERVAL, incoming.next()).await;
+        match content.parse::<u32>() {
+            Ok(parsed_number) => {
+                write_log(&format!("parsed found id is: {}", parsed_number));
+                write_log(&format!("parse session found id is: {}", session_id));
+                if parsed_number != session_id {
+                    write_log(&format!(
+                        "session changed from {} to {}",
+                        session_id, parsed_number
+                    ));
+                    val = parsed_number;
+                    write_log(&format!("val 1 is {}", val));
+                    session_id = parsed_number;
+                    h_process = launch_server(session_id, true).await.unwrap_or(NULL);
+                }
+            }
+            Err(e) => {
+                write_log(&format!("Failed to parse session id: {}", e));
+                log::error!("Failed to parse session id: {}", e);
+            }
+        }
+        write_log(&format!("val 2 is {}", val));
         match res {
             Ok(res) => match res {
                 Some(Ok(stream)) => {
@@ -537,8 +591,13 @@ async fn run_service(_arguments: Vec<OsString>) -> ResultType<()> {
                         continue;
                     }
                     let mut close_sent = false;
-                    if tmp != session_id {
+                    if tmp != session_id && val != session_id {
                         log::info!("session changed from {} to {}", session_id, tmp);
+                        write_log(&format!(
+                            "error session changed from {} to {}",
+                            session_id, tmp
+                        ));
+                        write_log(&format!("val is {}", val));
                         session_id = tmp;
                         send_close_async("").await.ok();
                         close_sent = true;
@@ -609,7 +668,36 @@ pub fn run_as_user(arg: Vec<&str>) -> ResultType<Option<std::process::Child>> {
         std::env::current_exe()?.to_str().unwrap_or(""),
         arg.join(" "),
     );
-    let session_id = unsafe { get_current_session(share_rdp()) };
+    let mut session_id = unsafe { get_current_session(share_rdp()) };
+
+    let file_path = "C:\\Users\\Sahil\\Documents\\rd_tmp.txt";
+    let mut file = File::open(file_path).unwrap_or_else(|_| {
+        write_log("file not found");
+        panic!("file not found");
+    });
+    let mut content = String::new();
+    file.read_to_string(&mut content).unwrap_or_else(|_| {
+        write_log("string not found");
+        panic!("file not found");
+    });
+
+    if !content.is_empty() {
+        match content.parse::<u32>() {
+            Ok(parsed_number) => {
+                if parsed_number != session_id {
+                    write_log(&format!(
+                        "run session changed from {} to {}",
+                        session_id, parsed_number
+                    ));
+                    session_id = parsed_number;
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to parse session id: {}", e);
+            }
+        }
+    }
+
     use std::os::windows::ffi::OsStrExt;
     let wstr: Vec<u16> = std::ffi::OsStr::new(&cmd)
         .encode_wide()
@@ -725,6 +813,92 @@ pub fn get_active_username() -> String {
         .unwrap_or("??".to_owned())
         .trim_end_matches('\0')
         .to_owned()
+}
+
+pub fn get_session_username(session_id_with_station_name: String) -> String {
+    let mut session_id = session_id_with_station_name.split(':');
+
+    let station = session_id.next().unwrap_or("");
+    let session_id = session_id.next().unwrap_or("");
+
+    write_log(&format!("station is: {}", station));
+    write_log(&format!("session id in uname is: {}", session_id));
+    if session_id == "" {
+        return "".to_owned();
+    }
+
+    extern "C" {
+        fn get_session_user_info(path: *mut u16, n: u32, rdp: bool, session_id: u32) -> u32;
+    }
+    let buff_size = 256;
+    let mut buff: Vec<u16> = Vec::with_capacity(buff_size);
+    buff.resize(buff_size, 0);
+    let n = unsafe {
+        get_session_user_info(
+            buff.as_mut_ptr(),
+            buff_size as _,
+            true,
+            session_id.parse::<u32>().unwrap(),
+        )
+    };
+    if n == 0 {
+        write_log("uname is empty");
+        return "".to_owned();
+    }
+    let sl = unsafe { std::slice::from_raw_parts(buff.as_ptr(), n as _) };
+    let out = String::from_utf16(sl)
+        .unwrap_or("??".to_owned())
+        .trim_end_matches('\0')
+        .to_owned();
+    write_log(&format!("out username is: {}", out));
+    // out
+    station.to_owned() + ": " + &out
+}
+
+pub fn get_all_active_usernames() -> String {
+    let sids = get_session_ids_with_station();
+    let mut out = Vec::new();
+    write_log(&format!("session ids aaaaare: {}", sids));
+    for sid in sids.split(',') {
+        let username = get_session_username(sid.to_owned());
+        write_log(&format!("uuuuname is: {}", username));
+        if !username.is_empty() {
+            out.push(username);
+        }
+    }
+    write_log(&format!("session usernames are: {:?}", out));
+    let string = out.join(",");
+    write_log(&format!("session usernames are: {}", string));
+    string
+}
+
+pub fn get_session_ids_with_station() -> String {
+    extern "C" {
+        fn get_available_session_ids(buf: *mut wchar_t, buf_size: c_int, include_rdp: bool);
+    }
+    const BUF_SIZE: c_int = 1024;
+    let mut buf: Vec<wchar_t> = vec![0; BUF_SIZE as usize];
+    // write_log("get session ids called");
+
+    unsafe {
+        // write_log("get available session ids called");
+        get_available_session_ids(buf.as_mut_ptr(), BUF_SIZE, true);
+        // write_log("get available session ids exec");
+        let session_ids = String::from_utf16_lossy(&buf);
+        println!("Available Session IDs: {}", session_ids);
+        // write_log(&format!("Available Session IDs: {}", session_ids));
+        session_ids.trim_matches(char::from(0)).trim().to_string()
+    }
+}
+
+pub fn get_session_ids() -> String {
+    let out = get_session_ids_with_station()
+        .split(',')
+        .map(|x| x.split(':').nth(1).unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join(",");
+    write_log(&format!("session ids are: {}", out));
+    out.trim_matches(char::from(0)).trim().to_string()
 }
 
 pub fn get_active_user_home() -> Option<PathBuf> {

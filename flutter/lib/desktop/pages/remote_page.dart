@@ -233,6 +233,9 @@ class _RemotePageState extends State<RemotePage>
     }
     await Get.delete<FFI>(tag: widget.id);
     removeSharedStates(widget.id);
+       bind.mainSetLocalOption(
+                key: 'selected_windows_session', value: "");
+                File('C:\\Users\\Sahil\\Documents\\rd_tmp.txt').writeAsStringSync("");
   }
 
   Widget emptyOverlay() => BlockableOverlay(
