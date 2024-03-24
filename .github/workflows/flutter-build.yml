@@ -13,11 +13,11 @@ on:
 env:
   CARGO_NDK_VERSION: "3.1.2"
   LLVM_VERSION: "15.0.6"
-  FLUTTER_VERSION: "3.13.9"
+  FLUTTER_VERSION: "3.16.9"
   FLUTTER_RUST_BRIDGE_VERSION: "1.80.1"
   # for arm64 linux because official Dart SDK does not work
-  FLUTTER_ELINUX_VERSION: "3.13.9"
-  FLUTTER_ELINUX_COMMIT_ID: "f4d4205893c16b0aa9cb6ba46b9f32b639d3b057"
+  FLUTTER_ELINUX_VERSION: "3.16.9"
+  FLUTTER_ELINUX_COMMIT_ID: "c02bd16e1630f5bd690b85c5c2456ac1920e25af"
   TAG_NAME: "${{ inputs.upload-tag }}"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # vcpkg version: 2023.10.19
@@ -33,10 +33,23 @@ env:
   RENDEZVOUS_SERVER: '${{ secrets.RENDEZVOUS_SERVER }}'
   API_SERVER: '${{ secrets.API_SERVER }}'
   UPLOAD_ARTIFACT: "${{ inputs.upload-artifact }}"
+  SIGN_BASE_URL: "${{ secrets.SIGN_BASE_URL }}"
 
 jobs:
+  build-RustDeskTempTopMostWindow:
+    uses: ./.github/workflows/third-party-RustDeskTempTopMostWindow.yml
+    with:
+      upload-artifact: ${{ inputs.upload-artifact }}
+      target: windows-2019
+      configuration: Release
+      platform: x64
+      target_version: Windows10
+    strategy:
+        fail-fast: false
+
   build-for-windows-flutter:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }})
+    needs: [build-RustDeskTempTopMostWindow]
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
@@ -55,7 +68,7 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - name: Checkout source code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v1
@@ -63,7 +76,7 @@ jobs:
           version: ${{ env.LLVM_VERSION }}
 
       - name: Install flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@v2.12.0 #https://github.com/subosito/flutter-action/issues/277
         with:
           channel: "stable"
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -73,7 +86,7 @@ jobs:
         run: |
           flutter doctor -v
           flutter precache --windows
-          Invoke-WebRequest -Uri https://github.com/fufesou/flutter-engine/releases/download/bugfix-crash-windows-angle-context-frameBuffer/windows-x64-release.zip -OutFile windows-x64-flutter-release.zip
+          Invoke-WebRequest -Uri https://github.com/fufesou/flutter-engine/releases/download/bugfix-subwindow-crash-3.16.9-apply-pull-47787/windows-x64-release.zip -OutFile windows-x64-flutter-release.zip
           Expand-Archive windows-x64-flutter-release.zip -DestinationPath .
           mv -Force windows-x64-release/*  C:/hostedtoolcache/windows/flutter/stable-${{ env.FLUTTER_VERSION }}-x64/bin/cache/artifacts/engine/windows-x64-release/
 
@@ -107,7 +120,7 @@ jobs:
         shell: bash
 
       - name: Build rustdesk
-        run: python3 .\build.py --portable --hwcodec --flutter --feature IddDriver
+        run: python3 .\build.py --portable --hwcodec --flutter --gpucodec --skip-portable-pack
 
       - name: find Runner.res
         # Windows: find Runner.res (compiled from ./flutter/windows/runner/Runner.rc), copy to ./Runner.res
@@ -125,37 +138,42 @@ jobs:
             ls -l ./libs/portable/Runner.res;
           fi
 
-      - name: Sign rustdesk files
-        uses: GermanBluefox/code-sign-action@v7
-        if: false # env.UPLOAD_ARTIFACT == 'true'
+      - name: Download RustDeskTempTopMostWindow artifacts
+        uses: actions/download-artifact@master
+        if: ${{ inputs.upload-artifact }}
         with:
-          certificate: '${{ secrets.WINDOWS_PFX_BASE64 }}'
-          password: '${{ secrets.WINDOWS_PFX_PASSWORD }}'
-          certificatesha1: '${{ secrets.WINDOWS_PFX_SHA1_THUMBPRINT }}'
-          # certificatename: '${{ secrets.CERTNAME }}'
-          folder: './flutter/build/windows/runner/Release/'
-          recursive: true
+          name: topmostwindow-artifacts
+          path: './flutter/build/windows/x64/runner/Release/'
+
+      - name: Compress unsigned
+        shell: bash
+        run: |
+          mv ./flutter/build/windows/x64/runner/Release ./rustdesk
+          tar czf rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}-unsigned.tar.gz rustdesk
+
+      - name: Sign rustdesk files
+        if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != ''
+        shell: bash
+        run: |
+          pip3 install requests argparse
+          BASE_URL=${{ secrets.SIGN_BASE_URL }} SECRET_KEY=${{ secrets.SIGN_SECRET_KEY }} python3 res/job.py sign_files ./rustdesk/
 
       - name: Build self-extracted executable
         shell: bash
         if: env.UPLOAD_ARTIFACT == 'true'
         run: |
           pushd ./libs/portable
-          python3 ./generate.py -f ../../flutter/build/windows/runner/Release/ -o . -e ../../flutter/build/windows/runner/Release/rustdesk.exe
+          pip3 install -r requirements.txt
+          python3 ./generate.py -f ../../rustdesk/ -o . -e ../../rustdesk/rustdesk.exe
           popd
           mkdir -p ./SignOutput
           mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.exe
 
       - name: Sign rustdesk self-extracted file
-        uses: GermanBluefox/code-sign-action@v7
-        if: false #env.UPLOAD_ARTIFACT == 'true'
-        with:
-          certificate: '${{ secrets.WINDOWS_PFX_BASE64 }}'
-          password: '${{ secrets.WINDOWS_PFX_PASSWORD }}'
-          certificatesha1: '${{ secrets.WINDOWS_PFX_SHA1_THUMBPRINT }}'
-          # certificatename: '${{ secrets.WINDOWS_PFX_NAME }}'
-          folder: './SignOutput'
-          recursive: false
+        if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != ''
+        shell: bash
+        run: |
+          BASE_URL=${{ secrets.SIGN_BASE_URL }} SECRET_KEY=${{ secrets.SIGN_SECRET_KEY }} python3 res/job.py sign_files ./SignOutput
 
       - name: Publish Release
         uses: softprops/action-gh-release@v1
@@ -165,6 +183,7 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           files: |
             ./SignOutput/rustdesk-*.exe
+            ./rustdesk-*.tar.gz
 
   # The fallback for the flutter version, we use Sciter for 32bit Windows.
   build-for-windows-sciter:
@@ -225,7 +244,7 @@ jobs:
           python3 res/inline-sciter.py
           # Patch sciter x86
           sed -i 's/branch = "dyn"/branch = "dyn_x86"/g' ./Cargo.toml
-          cargo build --features inline --release --bins
+          cargo build --features inline,gpucodec --release --bins
           mkdir -p ./Release
           mv ./target/release/rustdesk.exe ./Release/rustdesk.exe
           curl -LJ -o ./Release/sciter.dll https://github.com/c-smile/sciter-sdk/raw/master/bin.win/x32/sciter.dll
@@ -248,15 +267,11 @@ jobs:
           fi
 
       - name: Sign rustdesk files
-        uses: GermanBluefox/code-sign-action@v7
-        if: false #env.UPLOAD_ARTIFACT == 'true'
-        with:
-          certificate: '${{ secrets.WINDOWS_PFX_BASE64 }}'
-          password: '${{ secrets.WINDOWS_PFX_PASSWORD }}'
-          certificatesha1: '${{ secrets.WINDOWS_PFX_SHA1_THUMBPRINT }}'
-          # certificatename: '${{ secrets.CERTNAME }}'
-          folder: './Release/'
-          recursive: true
+        if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != ''
+        shell: bash
+        run: |
+          pip3 install requests argparse
+          BASE_URL=${{ secrets.SIGN_BASE_URL }} SECRET_KEY=${{ secrets.SIGN_SECRET_KEY }} python3 res/job.py sign_files ./Release/
 
       - name: Build self-extracted executable
         shell: bash
@@ -267,17 +282,14 @@ jobs:
           popd
           mkdir -p ./SignOutput
           mv ./target/release/rustdesk-portable-packer.exe ./SignOutput/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}-sciter.exe
+          mv ./Release ./rustdesk
+          tar czf rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.tar.gz rustdesk
 
       - name: Sign rustdesk self-extracted file
-        uses: GermanBluefox/code-sign-action@v7
-        if: false #env.UPLOAD_ARTIFACT == 'true'
-        with:
-          certificate: '${{ secrets.WINDOWS_PFX_BASE64 }}'
-          password: '${{ secrets.WINDOWS_PFX_PASSWORD }}'
-          certificatesha1: '${{ secrets.WINDOWS_PFX_SHA1_THUMBPRINT }}'
-          # certificatename: '${{ secrets.WINDOWS_PFX_NAME }}'
-          folder: './SignOutput'
-          recursive: false
+        if: env.UPLOAD_ARTIFACT == 'true' && env.SIGN_BASE_URL != ''
+        shell: bash
+        run: |
+          BASE_URL=${{ secrets.SIGN_BASE_URL }} SECRET_KEY=${{ secrets.SIGN_SECRET_KEY }} python3 res/job.py sign_files ./SignOutput/
 
       - name: Publish Release
         uses: softprops/action-gh-release@v1
@@ -287,6 +299,64 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           files: |
             ./SignOutput/rustdesk-*.exe
+            ./rustdesk-*.tar.gz
+
+  build-for-macOS-arm64:
+    name: build-for-macOS-arm64
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Install flutter rust bridge deps
+        shell: bash
+        run: |
+          cargo install flutter_rust_bridge_codegen --version ${{ env.FLUTTER_RUST_BRIDGE_VERSION }} --features "uuid"
+          pushd flutter && flutter pub get && popd
+          ~/.cargo/bin/flutter_rust_bridge_codegen --rust-input ./src/flutter_ffi.rs --dart-output ./flutter/lib/generated_bridge.dart --c-output ./flutter/macos/Runner/bridge_generated.h
+
+      - name: Build rustdesk
+        run: |
+          # --hwcodec not supported on macos yet
+          ./build.py --flutter
+
+      - name: Codesign app and create signed dmg
+        if: env.MACOS_P12_BASE64 != null && env.UPLOAD_ARTIFACT == 'true'
+        run: |
+          # Patch create-dmg to give more attempts to unmount image
+          CREATE_DMG="$(command -v create-dmg)"
+          CREATE_DMG="$(readlink -f "$CREATE_DMG")"
+          sed -i -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=7/' "$CREATE_DMG"
+          # start sign the rustdesk.app and dmg
+          rm rustdesk-${{ env.VERSION }}.dmg || true
+          codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict ./flutter/build/macos/Build/Products/Release/RustDesk.app -vvv
+          create-dmg --icon "RustDesk.app" 200 190 --hide-extension "RustDesk.app" --window-size 800 400 --app-drop-link 600 185 rustdesk-${{ env.VERSION }}.dmg ./flutter/build/macos/Build/Products/Release/RustDesk.app
+          codesign --force --options runtime -s ${{ secrets.MACOS_CODESIGN_IDENTITY }} --deep --strict rustdesk-${{ env.VERSION }}.dmg -vvv
+          # notarize the rustdesk-${{ env.VERSION }}.dmg
+          rcodesign notary-submit --api-key-path ~/.p12/api-key.json  --staple rustdesk-${{ env.VERSION }}.dmg
+
+      - name: Rename rustdesk
+        if: env.UPLOAD_ARTIFACT == 'true'
+        run: |
+          for name in rustdesk*??.dmg; do
+              mv "$name" "${name%%.dmg}-aarch64.dmg"
+          done
+
+      - name: Publish DMG package
+        if: env.UPLOAD_ARTIFACT == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
+            rustdesk*-aarch64.dmg
 
   build-for-macOS:
     name: ${{ matrix.job.target }} (${{ matrix.job.os }}) [${{ matrix.job.extra-build-args }}]
@@ -1774,7 +1844,7 @@ jobs:
 
       - name: Build archlinux package
         if: ${{ matrix.job.extra-build-features == '' }}
-        uses: vufa/arch-makepkg-action@master
+        uses: rustdesk-org/arch-makepkg-action@master
         with:
           packages: >
             llvm
@@ -1816,7 +1886,7 @@ jobs:
           prerelease: true
           tag_name: ${{ env.TAG_NAME }}
           files: |
-            res/rustdesk*.zst
+            res/rustdesk-${{ env.VERSION }}*.zst
 
       - name: Build appimage package
         if: matrix.job.extra-build-features == 'appimage' && env.UPLOAD_ARTIFACT == 'true'
@@ -2001,3 +2071,73 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           files: |
             flatpak/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.flatpak
+
+  build-rustdesk-web:
+    name: build-rustdesk-web
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - {
+              arch: x86_64,
+              target: x86_64-unknown-linux-gnu,
+              os: ubuntu-18.04,
+            }
+    env:
+      RELEASE_NAME: web-basic
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Prepare env
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y wget npm
+  
+      - name: Install flutter
+        uses: subosito/flutter-action@v2.12.0 #https://github.com/subosito/flutter-action/issues/277
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      # https://rustdesk.com/docs/en/dev/build/web/
+      - name: Build web
+        shell: bash
+        run: |
+          pushd flutter/web/js
+          npm install yarn -g
+          npm install typescript -g
+          npm install protoc -g
+          # Install protoc first, see: https://google.github.io/proto-lens/installing-protoc.html
+          npm install ts-proto
+          # Only works with vite <= 2.8, see: https://github.com/vitejs/vite/blob/main/docs/guide/build.md#chunking-strategy
+          npm install vite@2.8
+          yarn install && yarn build
+          popd
+
+          pushd flutter/web
+          wget https://github.com/rustdesk/doc.rustdesk.com/releases/download/console/web_deps.tar.gz
+          tar xzf web_deps.tar.gz
+          popd
+
+          pushd flutter
+          flutter build web --release
+          cd build
+          cp ../web/README.md web
+          # TODO: Remove the following line when the web is almost complete.
+          echo -e "\n\nThis build is for preview and not full functionality." >> web/README.md
+          dir_name="rustdesk-${{ env.VERSION }}-${{ env.RELEASE_NAME }}"
+          mv web "${dir_name}" && tar czf "${dir_name}".tar.gz "${dir_name}"
+          sha256sum "${dir_name}".tar.gz
+          popd
+
+      - name: Publish web
+        if: env.UPLOAD_ARTIFACT == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          prerelease: true
+          tag_name: ${{ env.TAG_NAME }}
+          files: |
+            flutter/build/rustdesk-${{ env.VERSION }}-${{ env.RELEASE_NAME }}.tar.gz

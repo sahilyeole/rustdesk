@@ -6,6 +6,7 @@ import 'package:flutter_hbb/consts.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_home_page.dart';
 import 'package:flutter_hbb/desktop/pages/desktop_setting_page.dart';
 import 'package:flutter_hbb/desktop/widgets/tabbar_widget.dart';
+import 'package:flutter_hbb/models/platform_model.dart';
 import 'package:flutter_hbb/models/state_model.dart';
 import 'package:get/get.dart';
 import 'package:window_manager/window_manager.dart';
@@ -53,6 +54,17 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
         page: DesktopHomePage(
           key: const ValueKey(kTabLabelHomePage),
         )));
+    if (bind.isIncomingOnly()) {
+      tabController.onSelected = (key) {
+        if (key == kTabLabelHomePage) {
+          windowManager.setSize(getIncomingOnlyHomeSize());
+          windowManager.setResizable(false);
+        } else {
+          windowManager.setSize(getIncomingOnlySettingsSize());
+          windowManager.setResizable(true);
+        }
+      };
+    }
   }
 
   @override
@@ -68,14 +80,17 @@ class _DesktopTabPageState extends State<DesktopTabPage> {
             backgroundColor: Theme.of(context).colorScheme.background,
             body: DesktopTab(
               controller: tabController,
-              tail: ActionIcon(
-                message: 'Settings',
-                icon: IconFont.menu,
-                onTap: DesktopTabPage.onAddSetting,
-                isClose: false,
+              tail: Offstage(
+                offstage: bind.isIncomingOnly() || bind.isDisableSettings(),
+                child: ActionIcon(
+                  message: 'Settings',
+                  icon: IconFont.menu,
+                  onTap: DesktopTabPage.onAddSetting,
+                  isClose: false,
+                ),
               ),
             )));
-    return Platform.isMacOS || kUseCompatibleUiMode
+    return isMacOS || kUseCompatibleUiMode
         ? tabWidget
         : Obx(
             () => DragToResizeArea(

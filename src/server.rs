@@ -39,6 +39,8 @@ pub(crate) mod wayland;
 #[cfg(target_os = "linux")]
 pub mod uinput;
 #[cfg(target_os = "linux")]
+pub mod rdp_input;
+#[cfg(target_os = "linux")]
 pub mod dbus;
 pub mod input_service;
 } else {
@@ -281,6 +283,8 @@ impl Server {
                 s.on_subscribe(conn.clone());
             }
         }
+        #[cfg(target_os = "macos")]
+        self.update_enable_retina();
         self.connections.insert(conn.id(), conn);
         *CONN_COUNT.lock().unwrap() = self.connections.len();
     }
@@ -291,6 +295,8 @@ impl Server {
         }
         self.connections.remove(&conn.id());
         *CONN_COUNT.lock().unwrap() = self.connections.len();
+        #[cfg(target_os = "macos")]
+        self.update_enable_retina();
     }
 
     pub fn close_connections(&mut self) {
@@ -323,6 +329,8 @@ impl Server {
             } else {
                 s.on_unsubscribe(conn.id());
             }
+            #[cfg(target_os = "macos")]
+            self.update_enable_retina();
         }
     }
 
@@ -371,6 +379,17 @@ impl Server {
                 }
             }
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    fn update_enable_retina(&self) {
+        let mut video_service_count = 0;
+        for (name, service) in self.services.iter() {
+            if Self::is_video_service_name(&name) && service.ok() {
+                video_service_count += 1;
+            }
+        }
+        *scrap::quartz::ENABLE_RETINA.lock().unwrap() = video_service_count < 2;
     }
 }
 
@@ -430,7 +449,9 @@ pub async fn start_server(is_server: bool) {
         log::info!("XAUTHORITY={:?}", std::env::var("XAUTHORITY"));
     }
     #[cfg(feature = "hwcodec")]
-    scrap::hwcodec::check_config_process();
+    scrap::hwcodec::hwcodec_new_check_process();
+    #[cfg(feature = "gpucodec")]
+    scrap::gpucodec::gpucodec_new_check_process();
     #[cfg(windows)]
     hbb_common::platform::windows::start_cpu_performance_monitor();
 

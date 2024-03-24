@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+use super::rdp_input::client::{RdpInputKeyboard, RdpInputMouse};
 use super::*;
 #[cfg(target_os = "macos")]
 use crate::common::is_server;
@@ -13,6 +15,8 @@ use hbb_common::{
 use rdev::{self, EventType, Key as RdevKey, KeyCode, RawKey};
 #[cfg(target_os = "macos")]
 use rdev::{CGEventSourceStateID, CGEventTapLocation, VirtualInput};
+#[cfg(target_os = "linux")]
+use scrap::wayland::pipewire::RDP_RESPONSE;
 use std::{
     convert::TryFrom,
     ops::{Deref, DerefMut, Sub},
@@ -420,7 +424,7 @@ struct VirtualInputState {
 #[cfg(target_os = "macos")]
 impl VirtualInputState {
     fn new() -> Option<Self> {
-        VirtualInput::new(CGEventSourceStateID::Private, CGEventTapLocation::Session)
+        VirtualInput::new(CGEventSourceStateID::CombinedSessionState, CGEventTapLocation::Session)
             .map(|virtual_input| Self {
                 virtual_input,
                 capslock_down: false,
@@ -458,6 +462,25 @@ pub async fn setup_uinput(minx: i32, maxx: i32, miny: i32, maxy: i32) -> ResultT
         .unwrap()
         .set_custom_keyboard(Box::new(keyboard));
     ENIGO.lock().unwrap().set_custom_mouse(Box::new(mouse));
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+pub async fn setup_rdp_input() -> ResultType<(), Box<dyn std::error::Error>> {
+    let mut en = ENIGO.lock()?;
+    let rdp_res_lock = RDP_RESPONSE.lock()?;
+    let rdp_res = rdp_res_lock.as_ref().ok_or("RDP response is None")?;
+
+    let keyboard = RdpInputKeyboard::new(rdp_res.conn.clone(), rdp_res.session.clone())?;
+    en.set_custom_keyboard(Box::new(keyboard));
+    log::info!("RdpInput keyboard created");
+
+    if let Some(stream) = rdp_res.streams.clone().into_iter().next() {
+        let mouse = RdpInputMouse::new(rdp_res.conn.clone(), rdp_res.session.clone(), stream)?;
+        en.set_custom_mouse(Box::new(mouse));
+        log::info!("RdpInput mouse created");
+    }
+
     Ok(())
 }
 
@@ -1293,6 +1316,7 @@ fn is_function_key(ck: &EnumOrUnknown<ControlKey>) -> bool {
     let mut res = false;
     if ck.value() == ControlKey::CtrlAltDel.value() {
         // have to spawn new thread because send_sas is tokio_main, the caller can not be tokio_main.
+        #[cfg(windows)]
         std::thread::spawn(|| {
             allow_err!(send_sas());
         });
@@ -1541,10 +1565,15 @@ async fn lock_screen_2() {
     lock_screen().await;
 }
 
+#[cfg(windows)]
 #[tokio::main(flavor = "current_thread")]
 async fn send_sas() -> ResultType<()> {
-    let mut stream = crate::ipc::connect(1000, crate::POSTFIX_SERVICE).await?;
-    timeout(1000, stream.send(&crate::ipc::Data::SAS)).await??;
+    if crate::platform::is_physical_console_session().unwrap_or(true) {
+        let mut stream = crate::ipc::connect(1000, crate::POSTFIX_SERVICE).await?;
+        timeout(1000, stream.send(&crate::ipc::Data::SAS)).await??;
+    } else {
+        crate::platform::send_sas();
+    };
     Ok(())
 }
 

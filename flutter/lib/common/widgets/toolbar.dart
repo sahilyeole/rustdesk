@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -442,18 +441,22 @@ Future<List<TToggleMenu>> toolbarDisplayToggle(
         child: Text(translate('Mute'))));
   }
   // file copy and paste
-  if (perms['file'] != false &&
+  if (ffiModel.keyboard &&
+      perms['file'] != false &&
       bind.mainHasFileClipboard() &&
       pi.platformAdditions.containsKey(kPlatformAdditionsHasFileClipboard)) {
+    final enabled = !ffiModel.viewOnly;
     final option = 'enable-file-transfer';
     final value =
         bind.sessionGetToggleOptionSync(sessionId: sessionId, arg: option);
     v.add(TToggleMenu(
         value: value,
-        onChanged: (value) {
-          if (value == null) return;
-          bind.sessionToggleOption(sessionId: sessionId, value: option);
-        },
+        onChanged: enabled
+            ? (value) {
+                if (value == null) return;
+                bind.sessionToggleOption(sessionId: sessionId, value: option);
+              }
+            : null,
         child: Text(translate('Enable file copy and paste'))));
   }
   // disable clipboard
@@ -475,31 +478,19 @@ Future<List<TToggleMenu>> toolbarDisplayToggle(
   }
   // lock after session end
   if (ffiModel.keyboard) {
+    final enabled = !ffiModel.viewOnly;
     final option = 'lock-after-session-end';
     final value =
         bind.sessionGetToggleOptionSync(sessionId: sessionId, arg: option);
     v.add(TToggleMenu(
         value: value,
-        onChanged: (value) {
-          if (value == null) return;
-          bind.sessionToggleOption(sessionId: sessionId, value: option);
-        },
+        onChanged: enabled
+            ? (value) {
+                if (value == null) return;
+                bind.sessionToggleOption(sessionId: sessionId, value: option);
+              }
+            : null,
         child: Text(translate('Lock after session end'))));
-  }
-  // swap key
-  if (ffiModel.keyboard &&
-      ((Platform.isMacOS && pi.platform != kPeerPlatformMacOS) ||
-          (!Platform.isMacOS && pi.platform == kPeerPlatformMacOS))) {
-    final option = 'allow_swap_key';
-    final value =
-        bind.sessionGetToggleOptionSync(sessionId: sessionId, arg: option);
-    v.add(TToggleMenu(
-        value: value,
-        onChanged: (value) {
-          if (value == null) return;
-          bind.sessionToggleOption(sessionId: sessionId, value: option);
-        },
-        child: Text(translate('Swap control-command key'))));
   }
 
   if (useTextureRender &&
@@ -552,6 +543,10 @@ Future<List<TToggleMenu>> toolbarDisplayToggle(
         child: Text(translate('True color (4:4:4)'))));
   }
 
+  if (isMobile) {
+    v.addAll(toolbarKeyboardToggles(ffi));
+  }
+
   return v;
 }
 
@@ -564,19 +559,27 @@ List<TToggleMenu> toolbarPrivacyMode(
   final sessionId = ffi.sessionId;
 
   getDefaultMenu(Future<void> Function(SessionID sid, String opt) toggleFunc) {
+    final enabled = !ffi.ffiModel.viewOnly;
     return TToggleMenu(
         value: privacyModeState.isNotEmpty,
-        onChanged: (value) {
-          if (value == null) return;
-          if (ffiModel.pi.currentDisplay != 0 &&
-              ffiModel.pi.currentDisplay != kAllDisplayValue) {
-            msgBox(sessionId, 'custom-nook-nocancel-hasclose', 'info',
-                'Please switch to Display 1 first', '', ffi.dialogManager);
-            return;
-          }
-          final option = 'privacy-mode';
-          toggleFunc(sessionId, option);
-        },
+        onChanged: enabled
+            ? (value) {
+                if (value == null) return;
+                if (ffiModel.pi.currentDisplay != 0 &&
+                    ffiModel.pi.currentDisplay != kAllDisplayValue) {
+                  msgBox(
+                      sessionId,
+                      'custom-nook-nocancel-hasclose',
+                      'info',
+                      'Please switch to Display 1 first',
+                      '',
+                      ffi.dialogManager);
+                  return;
+                }
+                final option = 'privacy-mode';
+                toggleFunc(sessionId, option);
+              }
+            : null,
         child: Text(translate('Privacy mode')));
   }
 
@@ -619,4 +622,68 @@ List<TToggleMenu> toolbarPrivacyMode(
           });
     }).toList();
   }
+}
+
+List<TToggleMenu> toolbarKeyboardToggles(FFI ffi) {
+  final ffiModel = ffi.ffiModel;
+  final pi = ffiModel.pi;
+  final sessionId = ffi.sessionId;
+  List<TToggleMenu> v = [];
+
+  // swap key
+  if (ffiModel.keyboard &&
+      ((isMacOS && pi.platform != kPeerPlatformMacOS) ||
+          (!isMacOS && pi.platform == kPeerPlatformMacOS))) {
+    final option = 'allow_swap_key';
+    final value =
+        bind.sessionGetToggleOptionSync(sessionId: sessionId, arg: option);
+    onChanged(bool? value) {
+      if (value == null) return;
+      bind.sessionToggleOption(sessionId: sessionId, value: option);
+    }
+
+    final enabled = !ffi.ffiModel.viewOnly;
+    v.add(TToggleMenu(
+        value: value,
+        onChanged: enabled ? onChanged : null,
+        child: Text(translate('Swap control-command key'))));
+  }
+
+  // reverse mouse wheel
+  if (ffiModel.keyboard) {
+    var optionValue =
+        bind.sessionGetReverseMouseWheelSync(sessionId: sessionId) ?? '';
+    if (optionValue == '') {
+      optionValue = bind.mainGetUserDefaultOption(key: kKeyReverseMouseWheel);
+    }
+    onChanged(bool? value) async {
+      if (value == null) return;
+      await bind.sessionSetReverseMouseWheel(
+          sessionId: sessionId, value: value ? 'Y' : 'N');
+    }
+
+    final enabled = !ffi.ffiModel.viewOnly;
+    v.add(TToggleMenu(
+        value: optionValue == 'Y',
+        onChanged: enabled ? onChanged : null,
+        child: Text(translate('Reverse mouse wheel'))));
+  }
+
+  // swap left right mouse
+  if (ffiModel.keyboard) {
+    final option = 'swap-left-right-mouse';
+    final value =
+        bind.sessionGetToggleOptionSync(sessionId: sessionId, arg: option);
+    onChanged(bool? value) {
+      if (value == null) return;
+      bind.sessionToggleOption(sessionId: sessionId, value: option);
+    }
+
+    final enabled = !ffi.ffiModel.viewOnly;
+    v.add(TToggleMenu(
+        value: value,
+        onChanged: enabled ? onChanged : null,
+        child: Text(translate('swap-left-right-mouse'))));
+  }
+  return v;
 }

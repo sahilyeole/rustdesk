@@ -6,7 +6,7 @@ on:
   workflow_call:
 
 env:
-  FLUTTER_VERSION: "3.13.9"
+  FLUTTER_VERSION: "3.16.9"
   FLUTTER_RUST_BRIDGE_VERSION: "1.80.1"
 
 jobs:
@@ -23,7 +23,7 @@ jobs:
             }
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install prerequisites
         run: |

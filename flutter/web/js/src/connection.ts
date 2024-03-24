@@ -6,7 +6,7 @@ import * as sha256 from "fast-sha256";
 import * as globals from "./globals";
 import { decompress, mapKey, sleep } from "./common";
 
-const PORT = 21116;
+export const PORT = 21116;
 const HOSTS = [
   "rs-sg.rustdesk.com",
   "rs-cn.rustdesk.com",
@@ -15,7 +15,7 @@ const HOSTS = [
 let HOST = localStorage.getItem("rendezvous-server") || HOSTS[0];
 const SCHEMA = "ws://";
 
-type MsgboxCallback = (type: string, title: string, text: string) => void;
+type MsgboxCallback = (type: string, title: string, text: string, link: string) => void;
 type DrawCallback = (data: Uint8Array) => void;
 //const cursorCanvas = document.createElement("canvas");
 
@@ -41,6 +41,7 @@ export default class Connection {
     this._msgs = [];
     this._id = "";
     this._videoTestSpeed = [0, 0];
+    this._options = {};
     //this._cursors = {};
   }
 
@@ -318,8 +319,8 @@ export default class Connection {
     }
   }
 
-  msgbox(type_: string, title: string, text: string) {
-    this._msgbox?.(type_, title, text);
+  msgbox(type_: string, title: string, text: string, link: string = '') {
+    this._msgbox?.(type_, title, text, link);
   }
 
   draw(frame: any) {
@@ -443,9 +444,9 @@ export default class Connection {
             if (this._videoTestSpeed[0] >= 30) {
               console.log(
                 "video decoder: " +
-                  parseInt(
-                    "" + this._videoTestSpeed[1] / this._videoTestSpeed[0]
-                  )
+                parseInt(
+                  "" + this._videoTestSpeed[1] / this._videoTestSpeed[0]
+                )
               );
               this._videoTestSpeed = [0, 0];
             }
@@ -456,6 +457,7 @@ export default class Connection {
   }
 
   handlePeerInfo(pi: message.PeerInfo) {
+    localStorage.setItem('last_remote_id', this._id);
     this._peerInfo = pi;
     if (pi.displays.length == 0) {
       this.msgbox("error", "Remote Error", "No Display");
@@ -540,6 +542,26 @@ export default class Connection {
     return this._options[name];
   }
 
+  getToggleOption(name: string): Boolean {
+    // TODO: more default settings
+    const defaultToggleTrue = [
+      'show-remote-cursor',
+      'privacy-mode',
+      'enable-file-transfer',
+      'allow_swap_key',
+    ];
+    return this._options[name] || (defaultToggleTrue.includes(name) ? true : false);
+  }
+
+  // TODO:
+  getStatus(): String {
+    return JSON.stringify({ status_num: 10 });
+  }
+
+  // TODO:
+  checkConnStatus() {
+  }
+
   setOption(name: string, value: any) {
     if (value == undefined) {
       delete this._options[name];
@@ -548,8 +570,10 @@ export default class Connection {
     }
     this._options["tm"] = new Date().getTime();
     const peers = globals.getPeers();
-    peers[this._id] = this._options;
-    localStorage.setItem("peers", JSON.stringify(peers));
+    if (peers) {
+      peers[this._id] = this._options;
+      localStorage.setItem("peers", JSON.stringify(peers));
+    }
   }
 
   inputKey(

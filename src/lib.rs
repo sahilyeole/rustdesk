@@ -41,9 +41,10 @@ pub mod cli;
 #[cfg(not(any(target_os = "android", target_os = "ios", feature = "cli")))]
 pub mod core_main;
 mod lang;
-mod license;
+mod custom_server;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod port_forward;
+mod auth_2fa;
 
 #[cfg(all(feature = "flutter", feature = "plugin_framework"))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]

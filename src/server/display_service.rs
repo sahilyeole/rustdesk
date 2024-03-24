@@ -24,7 +24,7 @@ lazy_static::lazy_static! {
     static ref IS_CAPTURER_MAGNIFIER_SUPPORTED: bool = is_capturer_mag_supported();
     static ref CHANGED_RESOLUTIONS: Arc<RwLock<HashMap<String, ChangedResolution>>> = Default::default();
     // Initial primary display index.
-    // It should should not be updated when displays changed.
+    // It should not be updated when displays changed.
     pub static ref PRIMARY_DISPLAY_IDX: usize = get_primary();
     static ref SYNC_DISPLAYS: Arc<Mutex<SyncDisplaysInfo>> = Default::default();
 }
@@ -178,7 +178,22 @@ fn displays_to_msg(displays: Vec<DisplayInfo>) -> Message {
 }
 
 fn check_get_displays_changed_msg() -> Option<Message> {
+    #[cfg(target_os = "linux")]
+    {
+        if !is_x11() {
+            return get_displays_msg();
+        }
+    }
     check_update_displays(&try_get_displays().ok()?);
+    get_displays_msg()
+}
+
+pub fn check_displays_changed() -> ResultType<()> {
+    check_update_displays(&try_get_displays()?);
+    Ok(())
+}
+
+fn get_displays_msg() -> Option<Message> {
     let displays = SYNC_DISPLAYS.lock().unwrap().get_update_sync_displays()?;
     Some(displays_to_msg(displays))
 }
@@ -258,7 +273,18 @@ pub(super) fn check_update_displays(all: &Vec<Display>) {
         .iter()
         .map(|d| {
             let display_name = d.name();
-            let original_resolution = get_original_resolution(&display_name, d.width(), d.height());
+            #[allow(unused_assignments)]
+            #[allow(unused_mut)]
+            let mut scale = 1.0;
+            #[cfg(target_os = "macos")]
+            {
+                scale = d.scale();
+            }
+            let original_resolution = get_original_resolution(
+                &display_name,
+                ((d.width() as f64) / scale).round() as usize,
+                (d.height() as f64 / scale).round() as usize,
+            );
             DisplayInfo {
                 x: d.origin().0 as _,
                 y: d.origin().1 as _,
@@ -268,6 +294,7 @@ pub(super) fn check_update_displays(all: &Vec<Display>) {
                 online: d.is_online(),
                 cursor_embedded: false,
                 original_resolution,
+                scale,
                 ..Default::default()
             }
         })

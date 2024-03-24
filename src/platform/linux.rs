@@ -17,7 +17,8 @@ use hbb_common::{
 use std::{
     cell::RefCell,
     ffi::OsStr,
-    io::Write,
+    fs::File,
+    io::{BufRead, BufReader, Write},
     path::{Path, PathBuf},
     process::{Child, Command},
     string::String,
@@ -213,6 +214,12 @@ fn try_start_server_(desktop: Option<&Desktop>) -> ResultType<Option<Child>> {
             if !desktop.xauth.is_empty() {
                 envs.push(("XAUTHORITY", desktop.xauth.clone()));
             }
+            if !desktop.wl_display.is_empty() {
+                envs.push(("WAYLAND_DISPLAY", desktop.wl_display.clone()));
+            }
+            if !desktop.home.is_empty() {
+                envs.push(("HOME", desktop.home.clone()));
+            }
             run_as_user(
                 vec!["--server"],
                 Some((desktop.uid.clone(), desktop.username.clone())),
@@ -375,7 +382,7 @@ pub fn start_os_service() {
 
         // Duplicate logic here with should_start_server
         // Login wayland will try to start a headless --server.
-        if desktop.username == "root" || !desktop.is_wayland() || desktop.is_login_wayland() {
+        if desktop.username == "root" || desktop.is_login_wayland() {
             // try kill subprocess "--server"
             stop_server(&mut user_server);
             // try start subprocess "--server"
@@ -403,7 +410,7 @@ pub fn start_os_service() {
 
             // try start subprocess "--server"
             if should_start_server(
-                false,
+                !desktop.is_wayland(),
                 is_display_changed,
                 &mut uid,
                 &desktop,
@@ -588,10 +595,8 @@ where
     let xdg = &format!("XDG_RUNTIME_DIR=/run/user/{}", uid) as &str;
     let mut args = vec![xdg, "-u", &username, cmd.to_str().unwrap_or("")];
     args.append(&mut arg.clone());
-    // -E required for opensuse
-    if is_opensuse() {
-        args.insert(0, "-E");
-    }
+    // -E is required to preserve env
+    args.insert(0, "-E");
 
     let task = Command::new("sudo").envs(envs).args(args).spawn()?;
     Ok(Some(task))
@@ -923,7 +928,7 @@ mod desktop {
 
     const XWAYLAND: &str = "Xwayland";
     const IBUS_DAEMON: &str = "ibus-daemon";
-    const PLASMA_KDED5: &str = "kded5";
+    const PLASMA_KDED: &str = "kded[0-9]+";
     const GNOME_GOA_DAEMON: &str = "goa-daemon";
     const RUSTDESK_TRAY: &str = "rustdesk +--tray";
 
@@ -935,7 +940,9 @@ mod desktop {
         pub protocal: String,
         pub display: String,
         pub xauth: String,
+        pub home: String,
         pub is_rustdesk_subprocess: bool,
+        pub wl_display: String,
     }
 
     impl Desktop {
@@ -960,12 +967,13 @@ mod desktop {
                     XWAYLAND,
                     IBUS_DAEMON,
                     GNOME_GOA_DAEMON,
-                    PLASMA_KDED5,
+                    PLASMA_KDED,
                     RUSTDESK_TRAY,
                 ];
                 for proc in display_proc {
                     self.display = get_env("DISPLAY", &self.uid, proc);
                     self.xauth = get_env("XAUTHORITY", &self.uid, proc);
+                    self.wl_display = get_env("WAYLAND_DISPLAY", &self.uid, proc);
                     if !self.display.is_empty() && !self.xauth.is_empty() {
                         break;
                     }
@@ -980,7 +988,7 @@ mod desktop {
                     XWAYLAND,
                     IBUS_DAEMON,
                     GNOME_GOA_DAEMON,
-                    PLASMA_KDED5,
+                    PLASMA_KDED,
                     XFCE4_PANEL,
                     SDDM_GREETER,
                 ];
@@ -1003,6 +1011,16 @@ mod desktop {
                 .display
                 .replace(&whoami::hostname(), "")
                 .replace("localhost", "");
+        }
+
+        fn get_home(&mut self) {
+            self.home = "".to_string();
+
+            let cmd = format!(
+                "getent passwd '{}' | awk -F':' '{{print $6}}'",
+                &self.username
+            );
+            self.home = run_cmds(&cmd).unwrap_or(format!("/home/{}", &self.username));
         }
 
         fn get_xauth_from_xorg(&mut self) {
@@ -1053,9 +1071,10 @@ mod desktop {
                     XWAYLAND,
                     IBUS_DAEMON,
                     GNOME_GOA_DAEMON,
-                    PLASMA_KDED5,
+                    PLASMA_KDED,
                     XFCE4_PANEL,
                     SDDM_GREETER,
+                    RUSTDESK_TRAY,
                 ];
                 for proc in display_proc {
                     self.xauth = get_env("XAUTHORITY", &self.uid, proc);
@@ -1176,6 +1195,7 @@ mod desktop {
                 return;
             }
 
+            self.get_home();
             if self.is_wayland() {
                 if is_xwayland_running() {
                     self.get_display_xauth_xwayland();
